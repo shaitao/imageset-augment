@@ -1,0 +1,8 @@
+[package]
+name = "imageset-augment"
+version = "0.1.0"
+authors = ["shaitao <228164917@qq.com>"]
+
+[dependencies]
+image = "*"
+clap = "2"
