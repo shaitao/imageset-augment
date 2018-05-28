@@ -84,7 +84,7 @@ fn main() {
         matches.value_of("height").map(|x| { x.parse::<u32>().expect("please input a integer") }).unwrap()
     );
 
-    let output_dir = matches.value_of("output_directory").unwrap();
+    let output_dir = matches.value_of("output_directory").unwrap_or("./results");
 
     println!("Generator {}x{} ({}x{}) images form a source image", r, c, w, h);
 
@@ -114,8 +114,8 @@ fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, h
             let (wdith, height) = img.dimensions();
 
             //小子图的中心坐标
-            let(mut w_c, w_stride) = caculate_first_center_stride(wdith, width_s, cols);
-            let(mut h_c, h_stride) = caculate_first_center_stride(height, height_s, rows);
+            let(mut w_c, w_stride) = calculate_first_center_stride(wdith, width_s, cols);
+            let(mut h_c, h_stride) = calculate_first_center_stride(height, height_s, rows);
 
             //建立目录
             let  path = PathBuf::from(output_dir);
@@ -188,21 +188,22 @@ fn progress_dir(dir: &str, rows: u32, cols: u32, width_s: u32, height_s: u32, ou
     Ok(())
 }
 
-/// range size of one side of image.
-/// side_size: size of one windows side.
-/// segment_number: number of windows on one direction.
-/// if window size is relatively small
+/// range 图片一条边的长度范围 .
+/// side_size: 小窗口一条边的长度.
+/// segment_number: 这个方向上切图的个数.
+///
+/// 窗口大小相对小的情况
 ///                 |*****|
 ///          |*****|
 ///       |:caculate this postition
 ///    |*****|
 /// |**********************|
-/// otherwise
+/// 窗口比较大的情况
 /// |*****|
 ///  |*****|
 ///   |*****|
 /// |********|
-fn caculate_first_center_stride(range:u32, side_size:u32, segment_number:u32 ) -> (u32,u32){
+fn calculate_first_center_stride(range:u32, side_size:u32, segment_number:u32 ) -> (u32, u32){
     let mut center1 = range/(segment_number + 1);
     let mut stride = center1;
 
