@@ -68,6 +68,13 @@ fn main() {
                 .required(true)
                 .takes_value(true)
         )
+        .arg(
+            Arg::with_name("output_directory")
+                .help("output directory")
+                .short("o")
+                .long("output")
+                .takes_value(true)
+        )
         .get_matches();
 
     let (r, c, w, h) = (
@@ -77,16 +84,18 @@ fn main() {
         matches.value_of("height").map(|x| { x.parse::<u32>().expect("please input a integer") }).unwrap()
     );
 
-    println!("generator {}x{} ({}x{}) images form a source image", r, c, w, h);
+    let output_dir = matches.value_of("output_directory").unwrap();
+
+    println!("Generator {}x{} ({}x{}) images form a source image", r, c, w, h);
 
     if let Some(file_name) = matches.value_of("input_file") {
         //处理单个文件
-        process_image(&file_name, r, c, w, h).unwrap();
+        process_image(&file_name, r, c, w, h, output_dir).unwrap();
 
     } else if let Some(dir) = matches.value_of("input_directory") {
         println!("Got input directory:{}", dir);
         //处理目录下所有文件
-        progress_dir(dir, r, c, w, h).unwrap(); //打不开目录直接报错
+        progress_dir(dir, r, c, w, h, output_dir).unwrap(); //打不开目录直接报错
     }
 }
 
@@ -94,7 +103,7 @@ fn main() {
 /// file: 图片路径
 /// rows, cols :u32 横向,纵向产生的个数
 ///  width_s, height_s:u32 小窗口的宽度,高度
-fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, height_s: u32) -> Result<(),image::ImageError> {
+fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, height_s: u32, output_dir:&str) -> Result<(),image::ImageError> {
     
     //file
     println!("processing image {:?}.", file.as_ref());
@@ -109,7 +118,7 @@ fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, h
             let(mut h_c, h_stride) = caculate_first_center_stride(height, height_s, rows);
 
             //建立目录
-            let  path = PathBuf::from("./results");
+            let  path = PathBuf::from(output_dir);
             if ! path.exists() {
                 let dir_builder = fs::DirBuilder::new();
                 dir_builder.create(&path).unwrap();
@@ -154,7 +163,7 @@ fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, h
 /// dir: 目录
 /// rows, cols :u32 横向,纵向产生的个数
 ///  width_s, height_s:u32 小图片的宽度,高度
-fn progress_dir(dir: &str, rows: u32, cols: u32, width_s: u32, height_s: u32) -> io::Result<()> {
+fn progress_dir(dir: &str, rows: u32, cols: u32, width_s: u32, height_s: u32, output_dir:&str) -> io::Result<()> {
     println!("processing directory. {}", dir);
 
     let mut files: Vec<PathBuf> = Vec::with_capacity(1000);
@@ -169,7 +178,7 @@ fn progress_dir(dir: &str, rows: u32, cols: u32, width_s: u32, height_s: u32) ->
     };
 
     files.into_par_iter().map(|path|{
-        match process_image(&path,rows,cols, width_s,height_s) {
+        match process_image(&path,rows,cols, width_s,height_s, output_dir) {
             Err(e) => {
                 println!("Failed to deal with file:{:?}. error:{}", &path, e);
             },

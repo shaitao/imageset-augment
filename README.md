@@ -5,6 +5,6 @@
 
 #### 使用方法
 
-./imageset-augment -f <文件名> -c <列数> -r <行数> -w <小窗宽度> -h <小窗高度>
+./imageset-augment -f <文件名>  -o <输出目录> -c <列数> -r <行数> -w <小窗宽度> -h <小窗高度>
 
-./imageset-augment -d <目录名> -c <列数> -r <行数> -w <小窗宽度> -h <小窗高度>
+./imageset-augment -d <目录名> -o <输出目录> -c <列数> -r <行数> -w <小窗宽度> -h <小窗高度>
