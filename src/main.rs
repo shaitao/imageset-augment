@@ -1,9 +1,10 @@
 extern crate clap;
 extern crate image;
+extern crate rayon;
 
 use clap::{App, Arg, ArgGroup};
-
-use image::{GenericImage, imageops,ImageResult,DecodingResult};
+use rayon::prelude::*;
+use image::{GenericImage, imageops};
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -80,7 +81,7 @@ fn main() {
 
     if let Some(file_name) = matches.value_of("input_file") {
         //处理单个文件
-        progress_image(&file_name, r, c, w, h).unwrap();
+        process_image(&file_name, r, c, w, h).unwrap();
 
     } else if let Some(dir) = matches.value_of("input_directory") {
         println!("Got input directory:{}", dir);
@@ -92,10 +93,11 @@ fn main() {
 ///处理单张图片, 从原始图片中挖出 rows x cols 张图片来
 /// file: 图片路径
 /// rows, cols :u32 横向,纵向产生的个数
-///  width_s, height_s:u32 小图片的宽度,高度
-fn progress_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, height_s: u32) -> Result<(),image::ImageError> {
+///  width_s, height_s:u32 小窗口的宽度,高度
+fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, height_s: u32) -> Result<(),image::ImageError> {
+    
     //file
-    println!("progressing image {:?}.", file.as_ref());
+    println!("processing image {:?}.", file.as_ref());
 
     match image::open(file) {
         Ok(mut img) => {
@@ -103,27 +105,14 @@ fn progress_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, 
             let (wdith, height) = img.dimensions();
 
             //小子图的中心坐标
-            let mut w_c = wdith/(cols+1);
+            let(mut w_c, w_stride) = caculate_first_center_stride(wdith, width_s, cols);
+            let(mut h_c, h_stride) = caculate_first_center_stride(height, height_s, rows);
 
-            let mut h_c = height/(rows+1);
-            let mut w_stride = w_c;
-            let mut h_stride = h_c;
-
-            // 如果小图剪切范围太大
-            //          |****|
-            //      |****|
-            //  |****|
-            //    |*******|
-            //需要缩放
-            //      |****|
-            //     |****|
-            //    |****|
-            //    |*******|
             //建立目录
             let  path = PathBuf::from("./results");
             if ! path.exists() {
                 let dir_builder = fs::DirBuilder::new();
-                dir_builder.create(&path).expect("failed to create directory.");
+                dir_builder.create(&path).unwrap();
             }
 
             //修剪掉文件类型, rust的安全性真可怕,每一步会出错的地方都要处理...
@@ -160,21 +149,60 @@ fn progress_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, 
         }
     }
 }
+
 ///处理目录下的所有图片,不包含子目录的
 /// dir: 目录
 /// rows, cols :u32 横向,纵向产生的个数
 ///  width_s, height_s:u32 小图片的宽度,高度
-fn progress_dir(dir: &str, r: u32, c: u32, width_s: u32, height_s: u32) -> io::Result<()> {
-    println!("progressing directory. {}", dir);
-    let mut files: Vec<PathBuf> = Vec::with_capacity(500);
+fn progress_dir(dir: &str, rows: u32, cols: u32, width_s: u32, height_s: u32) -> io::Result<()> {
+    println!("processing directory. {}", dir);
+
+    let mut files: Vec<PathBuf> = Vec::with_capacity(1000);
 
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_file() {
+            //progress_image(&path,rows,cols, width_s,height_s);
             files.push(path);
         }
     };
-    println!("{:?}", &files);
+
+    files.into_par_iter().map(|path|{
+        match process_image(&path,rows,cols, width_s,height_s) {
+            Err(e) => {
+                println!("Failed to deal with file:{:?}. error:{}", &path, e);
+            },
+            _ => (),
+        }
+    }).collect::<Vec<_>>();
     Ok(())
 }
+
+/// range size of one side of image.
+/// side_size: size of one windows side.
+/// segment_number: number of windows on one direction.
+/// if window size is relatively small
+///                 |*****|
+///          |*****|
+///       |:caculate this postition
+///    |*****|
+/// |**********************|
+/// otherwise
+/// |*****|
+///  |*****|
+///   |*****|
+/// |********|
+fn caculate_first_center_stride(range:u32, side_size:u32, segment_number:u32 ) -> (u32,u32){
+    let mut center1 = range/(segment_number + 1);
+    let mut stride = center1;
+
+    //u32 无法小于0
+    if (center1 as i32 - (side_size/2) as i32) < 0i32 {
+        center1 = side_size/2;
+        stride = (range - side_size)/(segment_number -1);
+    }
+
+    return (center1, stride)
+}
+
