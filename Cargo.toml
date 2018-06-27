@@ -7,3 +7,4 @@ authors = ["shaitao <228164917@qq.com>"]
 image = "*"
 clap = "2"
 rayon = "1.0"
+rand = "0.5"

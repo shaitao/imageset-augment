@@ -1,6 +1,7 @@
 extern crate clap;
 extern crate image;
 extern crate rayon;
+extern crate rand;
 
 use clap::{App, Arg, ArgGroup};
 use rayon::prelude::*;
@@ -9,9 +10,6 @@ use image::{GenericImage, imageops};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::fs;
-
-
-
 
 fn main() {
     println!("Hello, world!");
@@ -75,6 +73,11 @@ fn main() {
                 .long("output")
                 .takes_value(true)
         )
+        .arg(
+            Arg::with_name("shuffle")
+                .help("use random number to rename file.")
+                .long("shuffle")
+        )
         .get_matches();
 
     let (r, c, w, h) = (
@@ -86,16 +89,18 @@ fn main() {
 
     let output_dir = matches.value_of("output_directory").unwrap_or("./results");
 
+    let is_shuffle = matches.is_present("shuffle");
+
     println!("Generator {}x{} ({}x{}) images form a source image", r, c, w, h);
 
     if let Some(file_name) = matches.value_of("input_file") {
         //处理单个文件
-        process_image(&file_name, r, c, w, h, output_dir).unwrap();
+        process_image(&file_name, r, c, w, h, output_dir, is_shuffle).unwrap();
 
     } else if let Some(dir) = matches.value_of("input_directory") {
         println!("Got input directory:{}", dir);
         //处理目录下所有文件
-        progress_dir(dir, r, c, w, h, output_dir).unwrap(); //打不开目录直接报错
+        progress_dir(dir, r, c, w, h, output_dir, is_shuffle).unwrap(); //打不开目录直接报错
     }
 }
 
@@ -103,7 +108,7 @@ fn main() {
 /// file: 图片路径
 /// rows, cols :u32 横向,纵向产生的个数
 ///  width_s, height_s:u32 小窗口的宽度,高度
-fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, height_s: u32, output_dir:&str) -> Result<(),image::ImageError> {
+fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, height_s: u32, output_dir:&str, is_shuffle:bool) -> Result<(),image::ImageError> {
     
     //file
     println!("processing image {:?}.", file.as_ref());
@@ -124,11 +129,15 @@ fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, h
                 dir_builder.create(&path).unwrap();
             }
 
-            //修剪掉文件类型, rust的安全性真可怕,每一步会出错的地方都要处理...
-            let file_name = file.as_ref().file_name().unwrap()
-                .to_string_lossy()
-                .split('.').next().unwrap()
-                .to_string();
+
+            let file_name = match is_shuffle {
+
+                true => format!("{}",rand::random::<u32>()),
+
+                //修剪掉文件类型, rust的安全性真可怕,每一步会出错的地方都要处理...
+                false => file.as_ref().file_name().unwrap()
+                    .to_string_lossy().split('.').next().unwrap().to_string(),
+            };
 
             let w_c_base = w_c;
 
@@ -163,28 +172,29 @@ fn process_image<P: AsRef<Path>>(file: &P, rows: u32, cols: u32, width_s: u32, h
 /// dir: 目录
 /// rows, cols :u32 横向,纵向产生的个数
 ///  width_s, height_s:u32 小图片的宽度,高度
-fn progress_dir(dir: &str, rows: u32, cols: u32, width_s: u32, height_s: u32, output_dir:&str) -> io::Result<()> {
+fn progress_dir(dir: &str, rows: u32, cols: u32, width_s: u32, height_s: u32, output_dir:&str, is_shuffle:bool) -> io::Result<()> {
     println!("processing directory. {}", dir);
 
     let mut files: Vec<PathBuf> = Vec::with_capacity(1000);
 
     for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() {
-            //progress_image(&path,rows,cols, width_s,height_s);
-            files.push(path);
+        if let Ok(entry) = entry{
+            let path = entry.path();
+            if path.is_file() {
+                //progress_image(&path,rows,cols, width_s,height_s);
+                files.push(path);
+            }
         }
-    };
+    }
 
-    files.into_par_iter().map(|path|{
-        match process_image(&path,rows,cols, width_s,height_s, output_dir) {
+    files.par_iter().for_each(|path|{
+        match process_image(path,rows,cols, width_s,height_s, output_dir, is_shuffle) {
             Err(e) => {
                 println!("Failed to deal with file:{:?}. error:{}", &path, e);
             },
             _ => (),
         }
-    }).collect::<Vec<_>>();
+    });
     Ok(())
 }
 
